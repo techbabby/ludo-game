@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ludo Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#1a0d3d;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'Nunito Sans',sans-serif}
+
+  /* ── Touch Finger ── */
+  #touch-finger{
+    position:fixed;pointer-events:none;z-index:9999;
+    width:48px;height:48px;display:none;
+    transform:translate(-50%,-50%);
+    transition:opacity 0.2s;
+  }
+  #touch-finger svg{width:100%;height:100%;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5))}
+  @keyframes fingerTap{
+    0%{transform:translate(-50%,-50%) scale(1) rotate(-10deg)}
+    40%{transform:translate(-50%,-55%) scale(0.85) rotate(-10deg)}
+    70%{transform:translate(-50%,-50%) scale(1) rotate(-10deg)}
+    100%{transform:translate(-50%,-50%) scale(1) rotate(-10deg)}
+  }
+  @keyframes fingerFloat{
+    0%,100%{transform:translate(-50%,-50%) rotate(-10deg)}
+    50%{transform:translate(-50%,-56%) rotate(-10deg)}
+  }
+  #touch-finger.floating{animation:fingerFloat 2s ease-in-out infinite}
+  #touch-finger.tapping{animation:fingerTap 0.4s ease forwards}
+
+  /* ── Ripple ── */
+  .tap-ripple{
+    position:fixed;pointer-events:none;z-index:9998;
+    width:60px;height:60px;border-radius:50%;
+    background:rgba(255,255,255,0.35);
+    transform:translate(-50%,-50%) scale(0);
+    animation:rippleOut 0.5s ease forwards;
+  }
+  @keyframes rippleOut{
+    0%{transform:translate(-50%,-50%) scale(0);opacity:1}
+    100%{transform:translate(-50%,-50%) scale(2.5);opacity:0}
+  }
+
+  /* ── Main UI ── */
+  .ludo-wrap{font-family:'Nunito Sans',sans-serif;background:#2D1B69;min-height:600px;display:flex;flex-direction:column;align-items:center;padding:16px 12px 20px;border-radius:20px;max-width:380px;margin:0 auto;position:relative;user-select:none;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
+  .header{width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .round-badge{background:#1A0F4A;color:#fff;font-family:'Nunito',sans-serif;font-weight:800;font-size:15px;padding:6px 28px;border-radius:10px}
+  .coin-pill{background:#C9B8FF;color:#2D1B69;font-weight:700;font-size:13px;padding:5px 10px 5px 14px;border-radius:20px;display:flex;align-items:center;gap:6px}
+  .coin-plus{background:#F5C842;color:#2D1B69;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;line-height:1}
+  .help-btn{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;cursor:pointer}
+  .status-pill{border-radius:20px;font-weight:700;font-size:13px;padding:6px 16px;margin-bottom:6px;display:inline-block;transition:background 0.3s,color 0.3s}
+  .status-green{background:#4ADE80;color:#14532D}
+  .status-blue{background:#38BDF8;color:#0C4A6E}
+  .status-orange{background:#FB923C;color:#7C2D12}
+  .status-msg{color:rgba(255,255,255,0.85);font-size:13px;margin-bottom:8px;min-height:18px;text-align:center}
+  .board-container{position:relative;width:316px;height:316px}
+  .board{width:316px;height:316px;display:grid;border-radius:10px;overflow:hidden}
+  .cell{display:flex;align-items:center;justify-content:center;position:relative;font-size:7px}
+  .dice-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;cursor:pointer}
+  .dice-face{width:64px;height:64px;background:white;border-radius:12px;border:2.5px solid #111;display:grid;align-items:center;justify-items:center;padding:8px;box-shadow:3px 3px 0 #111;transition:transform 0.1s}
+  .dice-face:hover{transform:scale(1.05)}
+  .dice-face:active{transform:scale(0.95)}
+  .dice-face.spin{animation:diceSpin 0.35s ease}
+  @keyframes diceSpin{0%{transform:rotate(0deg) scale(1)}50%{transform:rotate(180deg) scale(1.15)}100%{transform:rotate(360deg) scale(1)}}
+  .dot{width:9px;height:9px;background:#111;border-radius:50%}
+  .dot-empty{width:9px;height:9px;background:transparent}
+  .dot-grid{display:grid;width:100%;height:100%}
+  .players-row{width:100%;display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:0 4px}
+  .player-card{display:flex;align-items:center;gap:8px}
+  .avatar{width:40px;height:40px;border-radius:8px;overflow:hidden}
+  .player-info{display:flex;flex-direction:column;gap:2px}
+  .player-name{color:#fff;font-size:13px;font-weight:700}
+  .stars{display:flex;gap:2px;font-size:11px}
+  .player-card.right{flex-direction:row-reverse}
+  .player-card.right .player-info{align-items:flex-end}
+  .win-modal-bg{position:absolute;inset:0;background:rgba(0,0,0,0.5);border-radius:20px;display:flex;align-items:center;justify-content:center;z-index:20}
+  .win-modal{background:#2D1B69;border-radius:20px;padding:28px 24px;text-align:center;width:260px;border:1px solid rgba(255,255,255,0.15)}
+  .win-icon{font-size:48px;margin-bottom:8px}
+  .win-title{font-family:'Nunito',sans-serif;font-size:28px;font-weight:900;color:#fff;margin-bottom:6px}
+  .win-sub{color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:20px}
+  .btn-play{background:#4ADE80;color:#14532D;font-weight:800;font-size:15px;border:none;border-radius:30px;padding:12px 0;width:100%;cursor:pointer;margin-bottom:10px;font-family:'Nunito',sans-serif}
+  .btn-exit{background:rgba(255,255,255,0.15);color:#fff;font-weight:700;font-size:15px;border:none;border-radius:30px;padding:12px 0;width:100%;cursor:pointer;font-family:'Nunito',sans-serif}
+  .mover{position:absolute;transition:top 0.28s ease,left 0.28s ease;z-index:5;pointer-events:none}
+  .mover-dot{width:20px;height:20px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4)}
+  .active-avatar{border:2.5px solid #4ADE80}
+  .inactive-avatar{border:2.5px solid rgba(255,255,255,0.2)}
+  .turn-indicator{width:8px;height:8px;border-radius:50%;background:#4ADE80;display:inline-block;margin-left:4px;animation:blink 1s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+  /* Sound toggle */
+  .sound-btn{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;transition:background 0.2s}
+  .sound-btn:hover{background:rgba(255,255,255,0.2)}
+  .sound-btn.muted{border-color:rgba(255,100,100,0.5);color:rgba(255,100,100,0.8)}
+
+  /* Token hop animation */
+  @keyframes tokenHop{
+    0%{transform:translateY(0)}
+    50%{transform:translateY(-6px)}
+    100%{transform:translateY(0)}
+  }
+  .mover.hopping .mover-dot{animation:tokenHop 0.28s ease}
+
+  /* Confetti burst */
+  .confetti-piece{position:fixed;pointer-events:none;z-index:9999;width:10px;height:10px;border-radius:2px;animation:confettiFall linear forwards}
+  @keyframes confettiFall{
+    0%{transform:translateY(0) rotate(0deg);opacity:1}
+    100%{transform:translateY(100vh) rotate(720deg);opacity:0}
+  }
+</style>
+</head>
+<body>
+
+<!-- Animated Finger -->
+<div id="touch-finger">
+  <svg viewBox="0 0 60 80" xmlns="http://www.w3.org/2000/svg">
+    <!-- Finger/hand pointing -->
+    <defs>
+      <radialGradient id="skinGrad" cx="40%" cy="30%">
+        <stop offset="0%" stop-color="#FDDBB4"/>
+        <stop offset="100%" stop-color="#E8A97A"/>
+      </radialGradient>
+      <filter id="fingerShadow">
+        <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.4"/>
+      </filter>
+    </defs>
+    <!-- Finger body -->
+    <path d="M22,70 C16,70 12,65 12,58 L12,34 C12,28 16,24 22,24 C24,24 26,25 28,26 L28,14 C28,10 31,7 35,7 C39,7 42,10 42,14 L42,30 C44,28 47,27 50,29 C53,31 54,35 53,39 L51,55 C49,64 41,70 32,70 Z" fill="url(#skinGrad)" filter="url(#fingerShadow)"/>
+    <!-- Knuckle lines -->
+    <path d="M18,44 Q22,42 28,44" stroke="#D4956A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <path d="M18,50 Q22,48 28,50" stroke="#D4956A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <!-- Fingernail -->
+    <ellipse cx="35" cy="11" rx="4.5" ry="3" fill="#F5C5A0" stroke="#D4956A" stroke-width="0.8"/>
+    <!-- Fingertip glow (tap indicator) -->
+    <ellipse id="finger-tip-glow" cx="35" cy="14" rx="6" ry="4" fill="rgba(255,200,100,0)" />
+  </svg>
+</div>
+
+<div class="ludo-wrap" id="app">
+  <div class="header">
+    <button class="sound-btn" id="sound-btn" onclick="toggleSound()" title="Toggle Sound">🔊</button>
+    <div class="round-badge" id="round-badge">Round 1</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="coin-pill">200 <div class="coin-plus">+</div></div>
+      <div class="help-btn">?</div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:4px">
+    <div class="status-pill status-green" id="status-pill">Your Turn</div>
+  </div>
+  <div class="status-msg" id="status-msg">Tap to roll dice</div>
+
+  <div class="board-container">
+    <div class="board" id="board"></div>
+    <div class="dice-overlay" id="dice-wrap">
+      <div class="dice-face" id="dice" onclick="handleDiceClick()">
+        <div class="dot-grid" id="dice-dots" style="grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;gap:2px"></div>
+      </div>
+    </div>
+    <div class="mover" id="mover-you" style="display:none">
+      <div class="mover-dot" style="background:#3B82F6"></div>
+    </div>
+    <div class="mover" id="mover-dami" style="display:none">
+      <div class="mover-dot" style="background:#EF4444"></div>
+    </div>
+  </div>
+
+  <div class="players-row">
+    <div class="player-card" id="you-card">
+      <div class="avatar active-avatar" id="you-avatar"><div style="background:#6B8F5E;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px">Y</div></div>
+      <div class="player-info">
+        <div class="player-name">You <span id="you-indicator" class="turn-indicator"></span></div>
+        <div class="stars" style="color:#F5C842">★★★★<span style="color:rgba(255,255,255,0.3)">★</span></div>
+      </div>
+    </div>
+    <div class="player-card right" id="dami-card">
+      <div class="avatar inactive-avatar" id="dami-avatar"><div style="background:#8B6F4E;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px">D</div></div>
+      <div class="player-info">
+        <div class="player-name">Dami <span id="dami-indicator" class="turn-indicator" style="display:none"></span></div>
+        <div class="stars" style="color:#F5C842">★★★★<span style="color:rgba(255,255,255,0.3)">★</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="win-modal-bg" id="win-modal" style="display:none">
+    <div class="win-modal">
+      <div class="win-icon" id="win-icon">🙌</div>
+      <div class="win-title" id="win-title">You Win!</div>
+      <div class="win-sub" id="win-sub">Congratulations! You brought all your tokens home</div>
+      <button class="btn-play" onclick="resetGame()">Play Again</button>
+      <button class="btn-exit">Exit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════
+// SOUND ENGINE (Web Audio API)
+// ══════════════════════════════════
+let audioCtx = null;
+let soundEnabled = true;
+
+function getAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playTone(freq, type, duration, vol=0.3, delay=0){
+  if(!soundEnabled) return;
+  try{
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime+delay);
+    gain.gain.setValueAtTime(vol, ctx.currentTime+delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+delay+duration);
+    osc.start(ctx.currentTime+delay);
+    osc.stop(ctx.currentTime+delay+duration);
+  }catch(e){}
+}
+
+function playNoise(duration, vol=0.15){
+  if(!soundEnabled) return;
+  try{
+    const ctx = getAudio();
+    const bufLen = ctx.sampleRate * duration;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++) data[i]=(Math.random()*2-1);
+    const src = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    filter.type='bandpass'; filter.frequency.value=800; filter.Q.value=0.5;
+    src.buffer = buf;
+    src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+duration);
+    src.start(); src.stop(ctx.currentTime+duration);
+  }catch(e){}
+}
+
+const SFX = {
+  diceRoll: ()=>{
+    // rattling dice sound
+    for(let i=0;i<8;i++){
+      const freq = 200+Math.random()*400;
+      playTone(freq,'square',0.05,0.12, i*0.04);
+    }
+    playNoise(0.35, 0.1);
+  },
+  diceResult: (val)=>{
+    // ascending ding for high rolls, lower for low
+    const notes=[0,262,294,330,392,440,523];
+    playTone(notes[val]||330,'sine',0.4,0.35);
+    playTone((notes[val]||330)*2,'sine',0.2,0.1,0.05);
+  },
+  tokenMove: ()=>{
+    playTone(600,'sine',0.08,0.15);
+    playTone(800,'sine',0.06,0.1,0.05);
+  },
+  yourTurn: ()=>{
+    // cheerful 3-note jingle
+    playTone(523,'sine',0.15,0.3);
+    playTone(659,'sine',0.15,0.3,0.15);
+    playTone(784,'sine',0.25,0.3,0.30);
+  },
+  win: ()=>{
+    // victory fanfare
+    const fanfare=[523,659,784,1047];
+    fanfare.forEach((f,i)=>{
+      playTone(f,'sine',0.3,0.4,i*0.12);
+      playTone(f*1.5,'sine',0.15,0.2,i*0.12+0.05);
+    });
+    setTimeout(()=>playTone(1047,'sine',0.6,0.5), 500);
+  },
+  lose: ()=>{
+    playTone(392,'sine',0.3,0.3);
+    playTone(330,'sine',0.3,0.3,0.2);
+    playTone(262,'sine',0.5,0.3,0.4);
+  },
+  tap: ()=>{
+    playTone(1200,'sine',0.05,0.2);
+  }
+};
+
+function toggleSound(){
+  soundEnabled = !soundEnabled;
+  const btn = document.getElementById('sound-btn');
+  btn.textContent = soundEnabled ? '🔊' : '🔇';
+  btn.classList.toggle('muted', !soundEnabled);
+  if(soundEnabled) SFX.tap();
+}
+
+// ══════════════════════════════════
+// TOUCH FINGER CONTROLLER
+// ══════════════════════════════════
+const finger = document.getElementById('touch-finger');
+let fingerVisible = false;
+let fingerTimeout = null;
+let floatInterval = null;
+
+function showFinger(x, y, mode='floating'){
+  finger.style.left = x+'px';
+  finger.style.top = y+'px';
+  finger.style.display = 'block';
+  finger.style.opacity = '1';
+  finger.className = mode;
+  fingerVisible = true;
+}
+
+function hideFinger(delay=800){
+  clearTimeout(fingerTimeout);
+  fingerTimeout = setTimeout(()=>{
+    finger.style.opacity = '0';
+    setTimeout(()=>{ finger.style.display='none'; fingerVisible=false; }, 200);
+  }, delay);
+}
+
+function fingerTap(x, y, onDone){
+  showFinger(x, y, 'tapping');
+  // ripple
+  const ripple = document.createElement('div');
+  ripple.className = 'tap-ripple';
+  ripple.style.left = x+'px';
+  ripple.style.top = y+'px';
+  document.body.appendChild(ripple);
+  setTimeout(()=>ripple.remove(), 600);
+  SFX.tap();
+  setTimeout(()=>{
+    hideFinger(600);
+    if(onDone) onDone();
+  }, 420);
+}
+
+function animateFingerToElement(el, onArrived){
+  const rect = el.getBoundingClientRect();
+  const tx = rect.left + rect.width/2;
+  const ty = rect.top + rect.height/2;
+  // Start from slightly off-screen bottom-right
+  const startX = tx + 60;
+  const startY = ty + 80;
+
+  finger.style.transition = 'none';
+  showFinger(startX, startY, '');
+  finger.style.opacity = '0.9';
+
+  setTimeout(()=>{
+    finger.style.transition = 'left 0.5s cubic-bezier(0.4,0,0.2,1), top 0.5s cubic-bezier(0.4,0,0.2,1)';
+    finger.style.left = tx+'px';
+    finger.style.top = ty+'px';
+    setTimeout(()=>{
+      finger.style.transition = 'none';
+      fingerTap(tx, ty, onArrived);
+    }, 520);
+  }, 50);
+}
+
+// ══════════════════════════════════
+// CONFETTI
+// ══════════════════════════════════
+function launchConfetti(){
+  const colors=['#4ADE80','#F5C842','#38BDF8','#FB923C','#C084FC','#F472B6'];
+  for(let i=0;i<60;i++){
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.cssText = `
+      left:${20+Math.random()*60}vw;
+      top:-10px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      width:${6+Math.random()*10}px;
+      height:${6+Math.random()*10}px;
+      border-radius:${Math.random()>0.5?'50%':'2px'};
+      animation-duration:${1.5+Math.random()*2}s;
+      animation-delay:${Math.random()*0.5}s;
+    `;
+    document.body.appendChild(piece);
+    setTimeout(()=>piece.remove(), 3500);
+  }
+}
+
+// ══════════════════════════════════
+// GAME PATHS
+// ══════════════════════════════════
+const FULL_PATH_YOU = [
+  [6,1],[6,2],[6,3],[6,4],[6,5],
+  [5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,7],
+  [0,8],[1,8],[2,8],[3,8],[4,8],[5,8],
+  [6,9],[6,10],[6,11],[6,12],[6,13],[6,14],[7,14],
+  [8,14],[8,13],[8,12],[8,11],[8,10],[8,9],
+  [9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[14,7],
+  [14,6],[13,6],[12,6],[11,6],[10,6],[9,6],
+  [8,5],[8,4],[8,3],[8,2],[8,1],[8,0],[7,0],
+  [6,0],
+  [7,1],[7,2],[7,3],[7,4],[7,5],[7,6]
+];
+
+const FULL_PATH_DAMI = [
+  [8,13],[8,12],[8,11],[8,10],[8,9],
+  [9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[14,7],
+  [14,6],[13,6],[12,6],[11,6],[10,6],[9,6],
+  [8,5],[8,4],[8,3],[8,2],[8,1],[8,0],[7,0],
+  [6,0],[6,1],[6,2],[6,3],[6,4],[6,5],
+  [5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,7],
+  [0,8],[1,8],[2,8],[3,8],[4,8],[5,8],
+  [6,9],[6,10],[6,11],[6,12],[6,13],[6,14],[7,14],
+  [8,14],
+  [7,13],[7,12],[7,11],[7,10],[7,9],[7,8]
+];
+
+const DICE_PATTERNS = {
+  1:[0,0,0,0,1,0,0,0,0],
+  2:[1,0,0,0,0,0,0,0,1],
+  3:[1,0,0,0,1,0,0,0,1],
+  4:[1,0,1,0,0,0,1,0,1],
+  5:[1,0,1,0,1,0,1,0,1],
+  6:[1,0,1,1,0,1,1,0,1]
+};
+
+let state = {
+  phase:'idle',
+  turn:'you',
+  youPos:0, damiPos:0,
+  moveInterval:null,
+  round:1
+};
+
+// ══════════════════════════════════
+// BOARD BUILDER
+// ══════════════════════════════════
+function buildBoard(){
+  const b=document.getElementById('board');
+  b.innerHTML='';
+  const cw=316/15;
+  b.style.gridTemplateColumns=`repeat(15,${cw}px)`;
+  b.style.gridTemplateRows=`repeat(15,${cw}px)`;
+  const RED_ZONE=[[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]];
+  const GREEN_ZONE=[[0,11],[0,12],[0,13],[0,14],[1,11],[1,12],[1,13],[1,14],[2,11],[2,12],[2,13],[2,14],[3,11],[3,12],[3,13],[3,14]];
+  const BLUE_ZONE=[[11,0],[11,1],[11,2],[11,3],[12,0],[12,1],[12,2],[12,3],[13,0],[13,1],[13,2],[13,3],[14,0],[14,1],[14,2],[14,3]];
+  const YELLOW_ZONE=[[11,11],[11,12],[11,13],[11,14],[12,11],[12,12],[12,13],[12,14],[13,11],[13,12],[13,13],[13,14],[14,11],[14,12],[14,13],[14,14]];
+  const CENTER=[[6,6],[6,7],[6,8],[7,6],[7,7],[7,8],[8,6],[8,7],[8,8]];
+  const SAFE=[[2,6],[6,2],[12,8],[8,12],[6,12],[12,6],[2,8],[8,2]];
+  const inS=(r,c,s)=>s.some(([rr,cc])=>rr===r&&cc===c);
+  for(let r=0;r<15;r++){
+    for(let c=0;c<15;c++){
+      const cell=document.createElement('div');
+      cell.className='cell';
+      cell.id=`cell-${r}-${c}`;
+      if(inS(r,c,RED_ZONE)){
+        if(r>=1&&r<=2&&c>=1&&c<=2){cell.style.cssText='background:#EF4444;border-radius:8px;margin:2px'}
+        else cell.style.background='#FECACA';
+      } else if(inS(r,c,GREEN_ZONE)){
+        if(r>=1&&r<=2&&c>=12&&c<=13){cell.style.cssText='background:#22C55E;border-radius:8px;margin:2px'}
+        else cell.style.background='#BBF7D0';
+      } else if(inS(r,c,BLUE_ZONE)){
+        if(r>=12&&r<=13&&c>=1&&c<=2){cell.style.cssText='background:#3B82F6;border-radius:8px;margin:2px'}
+        else cell.style.background='#BFDBFE';
+      } else if(inS(r,c,YELLOW_ZONE)){
+        if(r>=12&&r<=13&&c>=12&&c<=13){cell.style.cssText='background:#EAB308;border-radius:8px;margin:2px'}
+        else cell.style.background='#FEF08A';
+      } else if(inS(r,c,CENTER)){
+        if(r===7&&c===7){cell.style.background='#7C3AED';cell.innerHTML='<span style="color:#fff;font-size:14px;font-weight:900">★</span>';}
+        else if((r<7&&c===7)||(r===7&&c<7))cell.style.background='#EF4444';
+        else if((r<7&&c>7)||(r===7&&c>7))cell.style.background='#22C55E';
+        else if((r>7&&c===7)||(r===7&&c>7))cell.style.background='#3B82F6';
+        else cell.style.background='#EAB308';
+      } else {
+        const isPath=r===6||r===8||c===6||c===8;
+        cell.style.background=isPath?'#ffffff':'#e8e8e8';
+        if(r===7&&c>=1&&c<=5)cell.style.background='#FECACA';
+        if(r===7&&c>=9&&c<=13)cell.style.background='#BBF7D0';
+        if(c===7&&r>=1&&r<=5)cell.style.background='#FEF08A';
+        if(c===7&&r>=9&&r<=13)cell.style.background='#BFDBFE';
+        if(r===7&&(c===0||c===14))cell.style.background='#ffffff';
+        if(c===7&&(r===0||r===14))cell.style.background='#ffffff';
+        if(inS(r,c,SAFE))cell.innerHTML='<span style="color:#F5C842;font-size:9px">★</span>';
+        [[2,7,'↓'],[12,7,'↑'],[7,2,'→'],[7,12,'←']].forEach(([ar,ac,s])=>{if(r===ar&&c===ac)cell.innerHTML=`<span style="color:#888;font-size:10px">${s}</span>`;});
+      }
+      b.appendChild(cell);
+    }
+  }
+}
+
+// ══════════════════════════════════
+// DICE RENDER
+// ══════════════════════════════════
+function renderDice(val,color){
+  const dots=document.getElementById('dice-dots');
+  const face=document.getElementById('dice');
+  face.style.borderColor=color||'#111';
+  face.style.boxShadow=`3px 3px 0 ${color||'#111'}`;
+  dots.innerHTML='';
+  (DICE_PATTERNS[val]||DICE_PATTERNS[1]).forEach(d=>{
+    const el=document.createElement('div');
+    el.className=d?'dot':'dot-empty';
+    if(d&&color)el.style.background=color;
+    dots.appendChild(el);
+  });
+}
+
+function setPill(text,type){
+  const p=document.getElementById('status-pill');
+  p.textContent=text;
+  p.className='status-pill '+type;
+}
+function setMsg(text){document.getElementById('status-msg').textContent=text;}
+
+// ══════════════════════════════════
+// TURN UI
+// ══════════════════════════════════
+function updateTurnUI(){
+  const isYou=state.turn==='you';
+  document.getElementById('you-avatar').className='avatar '+(isYou?'active-avatar':'inactive-avatar');
+  document.getElementById('dami-avatar').className='avatar '+(isYou?'inactive-avatar':'active-avatar');
+  document.getElementById('you-indicator').style.display=isYou?'inline-block':'none';
+  document.getElementById('dami-indicator').style.display=isYou?'none':'inline-block';
+  const dice=document.getElementById('dice');
+  dice.style.cursor=isYou?'pointer':'default';
+  if(isYou){
+    renderDice(1,'#111');
+    setPill('Your Turn','status-green');
+    setMsg('Tap to roll dice');
+    SFX.yourTurn();
+    // Show finger hovering over dice after short delay
+    
+  } else {
+    renderDice(1,'#EF4444');
+    setPill("Dami's Turn",'status-orange');
+    setMsg('Dami is thinking...');
+    finger.style.display='none';
+  }
+}
+
+// ══════════════════════════════════
+// POSITION MATH
+// ══════════════════════════════════
+function getPixel(path,pos){
+  const cw=316/15;
+  const idx=Math.min(Math.max(pos-1,0),path.length-1);
+  const [r,c]=path[idx];
+  return{top:r*cw+cw/2-10,left:c*cw+cw/2-10};
+}
+
+// ══════════════════════════════════
+// DICE CLICK (Player)
+// ══════════════════════════════════
+function handleDiceClick(){
+  if(state.phase!=='idle'||state.turn!=='you')return;
+  // Trigger finger tap animation on the dice
+  const diceEl = document.getElementById('dice');
+  const rect = diceEl.getBoundingClientRect();
+  // fingerTap removed for manual control
+  doRoll('you');
+}
+
+// ══════════════════════════════════
+// ROLL
+// ══════════════════════════════════
+function doRoll(who){
+  state.phase='rolling';
+  const val=Math.floor(Math.random()*6)+1;
+  const dice=document.getElementById('dice');
+  SFX.diceRoll();
+  dice.classList.add('spin');
+
+  // If Dami, animate finger tapping the dice
+  if(who==='dami'){
+    const diceEl = document.getElementById('dice');
+    const rect = diceEl.getBoundingClientRect();
+    setTimeout(()=>{
+      animateFingerToElement(diceEl, null);
+    }, 300);
+  }
+
+  setTimeout(()=>{
+    dice.classList.remove('spin');
+    const color=who==='you'?'#111':'#EF4444';
+    renderDice(val,color);
+    SFX.diceResult(val);
+    if(who==='you'){
+      setPill(`You rolled a ${val}`,'status-blue');
+      setMsg('Moving your token...');
+    } else {
+      setPill(`Dami rolled a ${val}`,'status-orange');
+      setMsg("Dami's token is moving...");
+    }
+    setTimeout(()=>doMove(who,val),400);
+  },350);
+}
+
+// ══════════════════════════════════
+// MOVE TOKEN
+// ══════════════════════════════════
+function doMove(who,steps){
+  state.phase='moving';
+  const path=who==='you'?FULL_PATH_YOU:FULL_PATH_DAMI;
+  const moverId=who==='you'?'mover-you':'mover-dami';
+  const mover=document.getElementById(moverId);
+  mover.style.display='block';
+  let moved=0;
+  const startPos=getPixel(path,who==='you'?state.youPos:state.damiPos);
+  mover.style.top=startPos.top+'px';
+  mover.style.left=startPos.left+'px';
+
+  state.moveInterval=setInterval(()=>{
+    moved++;
+    if(who==='you') state.youPos++;
+    else state.damiPos++;
+    const pos=who==='you'?state.youPos:state.damiPos;
+    const px=getPixel(path,pos);
+    mover.style.top=px.top+'px';
+    mover.style.left=px.left+'px';
+    // hop animation
+    mover.classList.remove('hopping');
+    void mover.offsetWidth;
+    mover.classList.add('hopping');
+    SFX.tokenMove();
+
+    if(moved>=steps){
+      clearInterval(state.moveInterval);
+      const maxPos=path.length;
+      if(pos>=maxPos){
+        state.phase='won';
+        showWin(who);
+      } else {
+        state.phase='idle';
+        if(who==='you'){
+          state.turn='dami';
+          updateTurnUI();
+          setTimeout(()=>doRoll('dami'),1400);
+        } else {
+          state.turn='you';
+          updateTurnUI();
+        }
+      }
+    }
+  },320);
+}
+
+// ══════════════════════════════════
+// WIN
+// ══════════════════════════════════
+function showWin(who){
+  if(who==='you'){
+    SFX.win();
+    launchConfetti();
+  } else {
+    SFX.lose();
+  }
+  const modal=document.getElementById('win-modal');
+  document.getElementById('win-icon').textContent=who==='you'?'🙌':'😅';
+  document.getElementById('win-title').textContent=who==='you'?'You Win!':'Dami Wins!';
+  document.getElementById('win-sub').textContent=who==='you'?'Congratulations! You brought your token home!':'Dami beat you this time. Play again?';
+  modal.style.display='flex';
+  finger.style.display='none';
+}
+
+function resetGame(){
+  if(state.moveInterval)clearInterval(state.moveInterval);
+  state.round++;
+  document.getElementById('round-badge').textContent = 'Round '+state.round;
+  state={phase:'idle',turn:'you',youPos:0,damiPos:0,moveInterval:null,round:state.round};
+  document.getElementById('win-modal').style.display='none';
+  document.getElementById('mover-you').style.display='none';
+  document.getElementById('mover-dami').style.display='none';
+  updateTurnUI();
+}
+
+// ══════════════════════════════════
+// INIT
+// ══════════════════════════════════
+buildBoard();
+updateTurnUI();
+</script>
+</body>
+</html>
